@@ -13,17 +13,22 @@ public final class MyAwakableWorker implements MyAwakableRunnable {
     private final MyCounter counter;
     private final Lock lock;
     private final Condition waitingCondition;
+    private final Condition waitingBeforeAwakeCondition;
     private final Condition waitingAfterAwakeCondition;
     private final AtomicBoolean shouldWait;
+    private final AtomicBoolean shouldWaitBeforeAwake;
     private final AtomicBoolean shouldWaitAfterAwake;
+
 
     public MyAwakableWorker(String workerName, MyCounter counter) {
         this.workerName = workerName;
         this.counter = counter;
         this.lock = new ReentrantLock();
         this.waitingCondition = lock.newCondition();
+        this.waitingBeforeAwakeCondition = lock.newCondition();
         this.waitingAfterAwakeCondition = lock.newCondition();
         this.shouldWait = new AtomicBoolean(true);
+        this.shouldWaitBeforeAwake = new AtomicBoolean(true);
         this.shouldWaitAfterAwake = new AtomicBoolean(true);
     }
 
@@ -35,6 +40,8 @@ public final class MyAwakableWorker implements MyAwakableRunnable {
                 shouldWait.set(true);
                 while (shouldWait.get()) {
                     try {
+                        shouldWaitBeforeAwake.set(false);
+                        waitingBeforeAwakeCondition.signalAll();
                         waitingCondition.await();
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -44,12 +51,16 @@ public final class MyAwakableWorker implements MyAwakableRunnable {
                 if (!Thread.currentThread().isInterrupted()) {
                     Assert.state(!shouldWait.get(), Thread.currentThread().getName() + " escaped waiting state");
                     int count = counter.getAndIncrementCount();
-                    System.out.println(workerName + " prints " + count);
+                    System.out.println(Thread.currentThread().getName() + " running " + workerName + " prints " + count);
                     shouldWaitAfterAwake.set(false);
                     waitingAfterAwakeCondition.signalAll();
                 }
             }
         } finally {
+            shouldWaitBeforeAwake.set(false);
+            waitingBeforeAwakeCondition.signalAll();
+            shouldWaitAfterAwake.set(false);
+            waitingAfterAwakeCondition.signalAll();
             lock.unlock();
         }
     }
@@ -59,6 +70,13 @@ public final class MyAwakableWorker implements MyAwakableRunnable {
         lock.lock();
         boolean interrupted = false;
         try {
+            while(shouldWaitBeforeAwake.get()) {
+                try {
+                    waitingBeforeAwakeCondition.await();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
             shouldWait.set(false);
             waitingCondition.signalAll();
             shouldWaitAfterAwake.set(true);

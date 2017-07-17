@@ -14,9 +14,9 @@ public final class MyWorkBalancer {
     }
 
     private final void distibute(MyCounter myCounter, int totalWorkerCount) {
-        int workerCount = 1;
-        while (workerCount <= totalWorkerCount) {
-            MyAwakableRunnable myAwakableRunnable = new MyAwakableWorker("Thread" + workerCount, myCounter);
+        int workerCount = 0;
+        while (workerCount < totalWorkerCount) {
+            MyAwakableRunnable myAwakableRunnable = new MyAwakableWorker("Task" + workerCount, myCounter);
             awakableRunnableQueue.add(myAwakableRunnable);
             Thread workerThread = new Thread(myAwakableRunnable);
             workerThread.start();
